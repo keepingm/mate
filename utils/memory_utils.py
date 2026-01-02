@@ -129,9 +129,5 @@ class Memory:
             yield from module.iter_methods()
 
 
-if __name__ == '__main__':
-    memory = Memory("D:\BJFU\Project\PythonProject\crewai\\test_crew\src\\test_crew\output\hone_test_plan.md")
-    modules=memory.iter_modules()
-    for module in memory.modules:
-        print(module.to_json())
+
 
