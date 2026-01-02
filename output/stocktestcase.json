@@ -1,0 +1,559 @@
+[
+  {
+    "testCaseId": "TC_GetPrice_01",
+    "description": "MarketDataService.GetPrice 正常场景 - 打开 Market Watch 窗口时价格刷新成功",
+    "preconditions": [
+      "系统当前时间可用于触发价格刷新",
+      "依赖的市场数据源返回有效的股票价格数据"
+    ],
+    "inputs": {
+      "request": "打开 Market Watch 窗口触发价格刷新"
+    },
+    "steps": [
+      "调用 MarketDataService.GetPrice 方法"
+    ],
+    "expectedResults": [
+      "返回包含最新股票价格的响应对象",
+      "响应中的价格数据字段非空且格式正确",
+      "验证市场数据源接口被调用一次",
+      "验证返回的数据更新时间与当前系统时间相近"
+    ]
+  },
+  {
+    "testCaseId": "TC_GetPrice_02",
+    "description": "MarketDataService.GetPrice 异常场景 - 市场数据源不可用导致刷新失败",
+    "preconditions": [
+      "模拟市场数据源接口抛出异常或返回空数据"
+    ],
+    "inputs": {
+      "request": "打开 Market Watch 窗口触发价格刷新"
+    },
+    "steps": [
+      "调用 MarketDataService.GetPrice 方法"
+    ],
+    "expectedResults": [
+      "方法捕获异常并以失败状态返回或抛出特定异常",
+      "验证市场数据源接口被调用一次",
+      "后续刷新机制正确中止，未产生错误数据更新"
+    ]
+  },
+  {
+    "testCaseId": "TC_GetPrice_03",
+    "description": "MarketDataService.GetPrice 边界场景 - 刷新间隔正好达到5分钟",
+    "preconditions": [
+      "系统时间模拟为距离上次刷新时间正好5分钟"
+    ],
+    "inputs": {
+      "request": "打开 Market Watch 窗口触发价格刷新"
+    },
+    "steps": [
+      "调用 MarketDataService.GetPrice 方法"
+    ],
+    "expectedResults": [
+      "成功返回最新价格数据",
+      "价格数据正常更新且无延迟",
+      "验证市场数据源接口被调用一次"
+    ]
+  },
+  {
+    "testCaseId": "TC_GetHistoricalData_01",
+    "description": "MarketDataService.GetHistoricalData 正常场景 - 查询存在的股票历史走势数据",
+    "preconditions": [
+      "股票代码有效且对应历史数据存在于数据库"
+    ],
+    "inputs": {
+      "stockCode": "AAPL",
+      "startDate": "2024-01-01",
+      "endDate": "2024-03-31"
+    },
+    "steps": [
+      "调用 MarketDataService.GetHistoricalData(stockCode, startDate, endDate) 方法"
+    ],
+    "expectedResults": [
+      "返回包含指定日期区间的股票历史数据列表",
+      "返回的数据按日期顺序排列且数据非空",
+      "验证数据仓储接口被调用并正确传入参数",
+      "响应数据字段完整，包含日期、开盘价、收盘价、最高价、最低价和成交量"
+    ]
+  },
+  {
+    "testCaseId": "TC_GetHistoricalData_02",
+    "description": "MarketDataService.GetHistoricalData 异常场景 - 查询股票代码不存在",
+    "preconditions": [
+      "股票代码在系统中无对应历史数据"
+    ],
+    "inputs": {
+      "stockCode": "INVALID_CODE",
+      "startDate": "2024-01-01",
+      "endDate": "2024-03-31"
+    },
+    "steps": [
+      "调用 MarketDataService.GetHistoricalData(stockCode, startDate, endDate) 方法"
+    ],
+    "expectedResults": [
+      "返回空历史数据列表或抛出指定异常（如 DataNotFoundException）",
+      "验证数据仓储接口被调用并正确传入参数",
+      "系统无异常崩溃，处理流程符合预期"
+    ]
+  },
+  {
+    "testCaseId": "TC_GetHistoricalData_03",
+    "description": "MarketDataService.GetHistoricalData 边界场景 - 查询日期区间为空或起止日期相同",
+    "preconditions": [],
+    "inputs": [
+      {
+        "stockCode": "AAPL",
+        "startDate": "2024-06-01",
+        "endDate": "2024-06-01"
+      },
+      {
+        "stockCode": "AAPL",
+        "startDate": "",
+        "endDate": ""
+      }
+    ],
+    "steps": [
+      "分别调用 MarketDataService.GetHistoricalData(stockCode, startDate, endDate) 方法"
+    ],
+    "expectedResults": [
+      {
+        "case": "起止日期相同",
+        "结果": "返回单日的历史数据记录列表，或空列表",
+        "验证": "数据仓储接口获取对应日期数据"
+      },
+      {
+        "case": "日期为空",
+        "结果": "抛出参数校验异常或返回友好错误提示",
+        "验证": "不调用数据仓储接口"
+      }
+    ]
+  }
+,
+  {
+    "用例 ID": "TC_placeOrder_01",
+    "测试方法名": "placeOrder_whenValidOrder_shouldSubmitOrderAndReturnExecutionInfo",
+    "前置条件": "用户已登录，选中买卖方向，有效品种，数量大于0，订单类型合法，交易所服务正常",
+    "输入": {
+      "order_type": "限价单",
+      "product_id": "P123",
+      "quantity": 100,
+      "side": "买"
+    },
+    "步骤": [
+      "调用 OrderService.place_order 方法"
+    ],
+    "预期结果": [
+      "返回 PlaceOrderResponseDTO，包含有效订单ID和执行信息",
+      "调用仓储保存订单信息",
+      "调用交易所提交订单接口",
+      "无异常抛出"
+    ]
+  },
+  {
+    "用例 ID": "TC_placeOrder_02",
+    "测试方法名": "placeOrder_whenQuantityZero_shouldThrowInvalidParameterException",
+    "前置条件": "用户已登录，订单数量为0，不合法",
+    "输入": {
+      "order_type": "市价单",
+      "product_id": "P123",
+      "quantity": 0,
+      "side": "卖"
+    },
+    "步骤": [
+      "调用 OrderService.place_order 方法"
+    ],
+    "预期结果": [
+      "抛出 InvalidParameterException",
+      "未调用订单仓储或交易所提交接口"
+    ]
+  },
+  {
+    "用例 ID": "TC_placeOrder_03",
+    "测试方法名": "placeOrder_whenExchangeRejects_shouldReturnOrderRejectedResponse",
+    "前置条件": "订单参数合法，交易所服务返回拒绝",
+    "输入": {
+      "order_type": "限价单",
+      "product_id": "P123",
+      "quantity": 50,
+      "side": "买"
+    },
+    "步骤": [
+      "调用 OrderService.place_order 方法"
+    ],
+    "预期结果": [
+      "返回 PlaceOrderResponseDTO，状态为订单被拒绝",
+      "调用仓储更新订单状态为被拒绝",
+      "调用交易所接口返回失败响应"
+    ]
+  },
+  {
+    "用例 ID": "TC_cancelOrder_01",
+    "测试方法名": "cancelOrder_whenOrderIsUnfilled_shouldCancelAndReturnSuccess",
+    "前置条件": "订单存在且状态为未成交",
+    "输入": {
+      "order_id": "O456"
+    },
+    "步骤": [
+      "调用 OrderService.cancel_order 方法"
+    ],
+    "预期结果": [
+      "返回 CancelOrderResponseDTO，标识取消成功",
+      "调用仓储更新订单状态为已取消",
+      "调用交易所接口提交取消请求"
+    ]
+  },
+  {
+    "用例 ID": "TC_cancelOrder_02",
+    "测试方法名": "cancelOrder_whenOrderAlreadyFilled_shouldReturnCannotCancel",
+    "前置条件": "订单存在且状态为已全部成交",
+    "输入": {
+      "order_id": "O789"
+    },
+    "步骤": [
+      "调用 OrderService.cancel_order 方法"
+    ],
+    "预期结果": [
+      "返回 CancelOrderResponseDTO，提示无法取消",
+      "未调用仓储更新取消状态",
+      "未调用交易所取消接口"
+    ]
+  },
+  {
+    "用例 ID": "TC_cancelOrder_03",
+    "测试方法名": "cancelOrder_whenOrderNotFound_shouldThrowOrderNotFoundException",
+    "前置条件": "无该订单记录",
+    "输入": {
+      "order_id": "不存在的ID"
+    },
+    "步骤": [
+      "调用 OrderService.cancel_order 方法"
+    ],
+    "预期结果": [
+      "抛出 OrderNotFoundException",
+      "未调用交易所取消接口"
+    ]
+  },
+  {
+    "用例 ID": "TC_modifyOrder_01",
+    "测试方法名": "modifyOrder_whenValidModification_shouldUpdateOrderAndReturnSuccess",
+    "前置条件": "订单存在且未完全成交，修改后的数量和订单类型符合业务规则",
+    "输入": {
+      "order_id": "O123",
+      "new_quantity": 200,
+      "new_order_type": "限价单"
+    },
+    "步骤": [
+      "调用 OrderService.modify_order 方法"
+    ],
+    "预期结果": [
+      "返回 ModifyOrderResponseDTO，标识修改成功",
+      "调用仓储更新订单信息",
+      "调用交易所提交修改请求"
+    ]
+  },
+  {
+    "用例 ID": "TC_modifyOrder_02",
+    "测试方法名": "modifyOrder_whenOrderFullyFilled_shouldReturnCannotModify",
+    "前置条件": "订单已全部成交",
+    "输入": {
+      "order_id": "O234",
+      "new_quantity": 100,
+      "new_order_type": "市价单"
+    },
+    "步骤": [
+      "调用 OrderService.modify_order 方法"
+    ],
+    "预期结果": [
+      "返回 ModifyOrderResponseDTO，提示无法修改",
+      "不调用仓储更新接口",
+      "不调用交易所修改接口"
+    ]
+  },
+  {
+    "用例 ID": "TC_modifyOrder_03",
+    "测试方法名": "modifyOrder_whenInvalidQuantity_shouldThrowInvalidParameterException",
+    "前置条件": "订单存在，修改数量为0或负数",
+    "输入": {
+      "order_id": "O345",
+      "new_quantity": 0,
+      "new_order_type": "限价单"
+    },
+    "步骤": [
+      "调用 OrderService.modify_order 方法"
+    ],
+    "预期结果": [
+      "抛出 InvalidParameterException",
+      "不调用仓储和交易所接口"
+    ]
+  },
+  {
+    "用例 ID": "TC_getOrderHistory_01",
+    "测试方法名": "getOrderHistory_whenUserHasOrders_shouldReturnOrderDetailsList",
+    "前置条件": "用户存在历史订单",
+    "输入": {
+      "user_id": "U10001"
+    },
+    "步骤": [
+      "调用 OrderService.get_order_history 方法"
+    ],
+    "预期结果": [
+      "返回 GetOrderHistoryResponseDTO，包含订单详情列表",
+      "调用仓储查询订单历史，返回非空列表"
+    ]
+  },
+  {
+    "用例 ID": "TC_getOrderHistory_02",
+    "测试方法名": "getOrderHistory_whenUserHasNoOrders_shouldReturnEmptyList",
+    "前置条件": "用户不存在或无历史订单",
+    "输入": {
+      "user_id": "U99999"
+    },
+    "步骤": [
+      "调用 OrderService.get_order_history 方法"
+    ],
+    "预期结果": [
+      "返回 GetOrderHistoryResponseDTO，订单详情列表为空",
+      "调用仓储返回空集合"
+    ]
+  },
+  {
+    "用例 ID": "TC_getOrderHistory_03",
+    "测试方法名": "getOrderHistory_whenStorageThrowsException_shouldPropagateException",
+    "前置条件": "订单仓储查询时抛出异常",
+    "输入": {
+      "user_id": "U10002"
+    },
+    "步骤": [
+      "调用 OrderService.get_order_history 方法"
+    ],
+    "预期结果": [
+      "抛出对应业务异常",
+      "调用仓储查询时发生异常"
+    ]
+  }
+,
+    {
+      "testCaseId": "TC_get_balance_01",
+      "description": "正常查询账户余额和持仓市值",
+      "preconditions": "模拟账户存在且账户余额、持仓市值和保证金记录完整合理",
+      "input": {
+        "accountId": "ACC123",
+        "mockAccountBalance": 10000.50,
+        "mockPositionValue": 5000.75,
+        "mockMargin": 2000.25
+      },
+      "steps": [
+        "调用 AccountService.get_balance(accountId)"
+      ],
+      "expectedResults": [
+        "返回一个非空的余额对象，balance字段等于10000.50",
+        "持仓市值字段等于5000.75",
+        "保证金字段等于2000.25",
+        "验证持仓和余额仓储接口被调用一次"
+      ]
+    },
+    {
+      "testCaseId": "TC_get_balance_02",
+      "description": "账户不存在导致查询失败",
+      "preconditions": "mock账户仓储返回null表示账户不存在",
+      "input": {
+        "accountId": "NON_EXISTENT_ACC"
+      },
+      "steps": [
+        "调用 AccountService.get_balance(accountId)"
+      ],
+      "expectedResults": [
+        "抛出 AccountNotFoundException",
+        "验证账户仓储的查询方法被调用一次",
+        "不调用持仓和保证金计算仓储或方法"
+      ]
+    },
+    {
+      "testCaseId": "TC_get_balance_03",
+      "description": "账户余额为0的边界场景",
+      "preconditions": "账户存在且余额为0，持仓市值和保证金为0",
+      "input": {
+        "accountId": "ACC_ZERO_BALANCE",
+        "mockAccountBalance": 0.0,
+        "mockPositionValue": 0.0,
+        "mockMargin": 0.0
+      },
+      "steps": [
+        "调用 AccountService.get_balance(accountId)"
+      ],
+      "expectedResults": [
+        "返回余额对象后三个字段均为0",
+        "不抛出异常",
+        "仓储调用正常"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_margin_01",
+      "description": "正常计算保证金",
+      "preconditions": "账户存在且持仓数据有效",
+      "input": {
+        "accountId": "ACC_MARGIN_01",
+        "mockPositions": [
+          {"symbol": "stockA", "qty": 100, "price": 20, "marginRate": 0.1},
+          {"symbol": "stockB", "qty": 50, "price": 40, "marginRate": 0.2}
+        ]
+      },
+      "steps": [
+        "调用 AccountService.calculate_margin(accountId)"
+      ],
+      "expectedResults": [
+        "计算保证金正确为 100*20*0.1 + 50*40*0.2 = 200 + 400 = 600",
+        "返回保证金金额为600",
+        "验证持仓仓储调用获取持仓列表",
+        "不抛出异常"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_margin_02",
+      "description": "账户不存在导致保证金计算失败",
+      "preconditions": "账户查询返回null",
+      "input": {
+        "accountId": "INVALID_ACC"
+      },
+      "steps": [
+        "调用 AccountService.calculate_margin(accountId)"
+      ],
+      "expectedResults": [
+        "抛出 AccountNotFoundException",
+        "调用持仓仓储查询被调用一次",
+        "不计算保证金"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_margin_03",
+      "description": "持仓为空导致保证金为0",
+      "preconditions": "账户存在但持仓列表为空",
+      "input": {
+        "accountId": "ACC_EMPTY_POSITIONS",
+        "mockPositions": []
+      },
+      "steps": [
+        "调用 AccountService.calculate_margin(accountId)"
+      ],
+      "expectedResults": [
+        "返回保证金金额0",
+        "持仓仓储被调用并返回空集合",
+        "不抛出异常"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_pl_01",
+      "description": "正常计算持仓盈亏",
+      "preconditions": "账户持仓存在且价格及成本数据有效",
+      "input": {
+        "accountId": "ACC_PL_01",
+        "mockPositions": [
+          {"symbol": "stockX", "qty": 100, "currentPrice": 50, "costPrice": 45},
+          {"symbol": "stockY", "qty": 200, "currentPrice": 30, "costPrice": 35}
+        ]
+      },
+      "steps": [
+        "调用 AccountService.calculate_pl(accountId)"
+      ],
+      "expectedResults": [
+        "计算持仓盈亏：(100 * (50 - 45)) + (200 * (30 - 35)) = 500 - 1000 = -500",
+        "返回盈亏金额为-500",
+        "持仓仓储调用一次返回持仓数据",
+        "不抛出异常"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_pl_02",
+      "description": "账户不存在导致盈亏计算失败",
+      "preconditions": "账户不存在返回空或null",
+      "input": {
+        "accountId": "INVALID_ACC"
+      },
+      "steps": [
+        "调用 AccountService.calculate_pl(accountId)"
+      ],
+      "expectedResults": [
+        "抛出 AccountNotFoundException",
+        "仓储持仓查询被调用一次",
+        "不计算盈亏"
+      ]
+    },
+    {
+      "testCaseId": "TC_calculate_pl_03",
+      "description": "持仓为空导致盈亏为0",
+      "preconditions": "账户存在但持仓列表为空",
+      "input": {
+        "accountId": "ACC_EMPTY_POSITIONS",
+        "mockPositions": []
+      },
+      "steps": [
+        "调用 AccountService.calculate_pl(accountId)"
+      ],
+      "expectedResults": [
+        "返回盈亏金额0",
+        "持仓仓储被调用返回空集合",
+        "不抛出异常"
+      ]
+    },
+    {
+      "testCaseId": "TC_export_account_reports_01",
+      "description": "成功导出账户报告文件",
+      "preconditions": "账户存在且相关报表数据合法完整，文件生成正常",
+      "input": {
+        "requestDTO": {
+          "accountId": "ACC_REPORT_01",
+          "reportTypes": ["PL", "IndustryConfig", "EquityDistribution"],
+          "dateRange": {"startDate": "2024-01-01", "endDate": "2024-03-31"}
+        },
+        "mockReportFilePath": "/tmp/ACC_REPORT_01_PL_Report.csv"
+      },
+      "steps": [
+        "调用 AccountService.export_account_reports(requestDTO)"
+      ],
+      "expectedResults": [
+        "返回的ResponseDTO包含文件下载地址和成功状态码",
+        "验证报表生成模块被调用生成相应类型的报表",
+        "不抛出异常"
+      ]
+    },
+    {
+      "testCaseId": "TC_export_account_reports_02",
+      "description": "账户不存在导致导出失败",
+      "preconditions": "mock账户仓储返回null",
+      "input": {
+        "requestDTO": {
+          "accountId": "NON_EXISTENT_ACC",
+          "reportTypes": ["PL"],
+          "dateRange": {"startDate": "2024-01-01", "endDate": "2024-01-31"}
+        }
+      },
+      "steps": [
+        "调用 AccountService.export_account_reports(requestDTO)"
+      ],
+      "expectedResults": [
+        "抛出 AccountNotFoundException",
+        "不调用报表生成模块",
+        "不生成文件"
+      ]
+    },
+    {
+      "testCaseId": "TC_export_account_reports_03",
+      "description": "请求参数非法导致导出失败",
+      "preconditions": "请求DTO中reportTypes为空或者dateRange非法",
+      "input": {
+        "requestDTO": {
+          "accountId": "ACC_REPORT_01",
+          "reportTypes": [],
+          "dateRange": {"startDate": "2024-04-01", "endDate": "2024-01-01"}
+        }
+      },
+      "steps": [
+        "调用 AccountService.export_account_reports(requestDTO)"
+      ],
+      "expectedResults": [
+        "抛出 InvalidParameterException",
+        "不调用报表生成模块",
+        "不生成文件"
+      ]
+    }
+  ]

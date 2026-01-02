@@ -1,0 +1,147 @@
+{
+  "modules": [
+    {
+      "module_id": "M2",
+      "name": "MarketData",
+      "classes": [
+        "Stock",
+        "StockRepository",
+        "StockRepositoryImpl",
+        "MarketDataService",
+        "GetMarketWatchRequestDTO",
+        "GetMarketWatchResponseDTO",
+        "GetHistoricalDataRequestDTO",
+        "GetHistoricalDataResponseDTO"
+      ],
+      "responsibility_summary": "负责提供股票和期货的实时及历史市场数据，包括行情获取、历史走势查询以及相关报表与图表数据支持。",
+      "reasons": {
+        "cohesion": "类和功能均聚焦于市场数据的查询和处理，提供给交易和用户界面模块行情及图表信息。",
+        "coupling": "仅依赖外部市场数据源和数据库，向订单模块提供行情触发下单入口，解耦保证模块独立。",
+        "requirements_trace": [
+          "2.1.2 Use Case 2: Market Data Display",
+          "3.4 Logical Database Requirements",
+          "3.5 Design Constraints - 数据刷新频率"
+        ]
+      },
+      "features": [
+        {
+          "name": "watchlistPriceRefresh",
+          "methods": [
+            "MarketDataService.GetPrice"
+          ],
+          "requirements": "用户打开“Market Watch”窗口时，系统以约5分钟间隔刷新价格并自动更新展示。"
+        },
+        {
+          "name": "historicalDataQuery",
+          "methods": [
+            "MarketDataService.GetHistoricalData"
+          ],
+          "requirements": "用户查询某股票历史走势，系统返回相应历史数据以供展示。"
+        }
+      ]
+    },
+    {
+      "module_id": "M3",
+      "name": "OrderManagement",
+      "classes": [
+        "Order",
+        "OrderRepository",
+        "OrderRepositoryImpl",
+        "OrderService",
+        "CancelOrderRequestDTO",
+        "CancelOrderResponseDTO",
+        "GetOrderHistoryRequestDTO",
+        "GetOrderHistoryResponseDTO",
+        "ModifyOrderRequestDTO",
+        "ModifyOrderResponseDTO",
+        "PlaceOrderRequestDTO",
+        "PlaceOrderResponseDTO"
+      ],
+      "responsibility_summary": "负责买卖订单的创建、修改、取消、查询及其状态管理，实现订单验证、交互和执行流程，保障交易合规与执行效率。",
+      "reasons": {
+        "cohesion": "所有订单相关实体、仓储和服务紧密协作完成订单生命周期管理，支撑核心交易用例。",
+        "coupling": "通过订单接口与市场数据和账户模块交互，依赖最小化且使用接口解耦，保障模块独立测试。",
+        "requirements_trace": [
+          "2.1.3 Use Case 3: Order Placement & Execution",
+          "3.1 Performance Requirements - 高并发及SLA限制",
+          "4. Verification - Functional Testing关于订单验证和执行确认"
+        ]
+      },
+      "features": [
+        {
+          "name": "placeOrder",
+          "methods": [
+            "OrderService.place_order"
+          ],
+          "requirements": "用户选择买卖、品种及数量，设置订单类型，系统校验并提交至交易所，等待执行信息返回。"
+        },
+        {
+          "name": "cancelOrder",
+          "methods": [
+            "OrderService.cancel_order"
+          ],
+          "requirements": "允许用户取消未成交订单，系统更新状态并反馈取消结果。"
+        },
+        {
+          "name": "modifyOrder",
+          "methods": [
+            "OrderService.modify_order"
+          ],
+          "requirements": "支持对未完全成交订单修改数量及订单类型，符合业务规则。"
+        },
+        {
+          "name": "getOrderHistory",
+          "methods": [
+            "OrderService.get_order_history"
+          ],
+          "requirements": "用户查询历史订单列表，并返回订单详情。"
+        }
+      ]
+    },
+    {
+      "module_id": "M4",
+      "name": "AccountManagement",
+      "classes": [
+        "AccountService",
+        "DemateAccount",
+        "DemateAccountRepository",
+        "DemateAccountRepositoryImpl",
+        "Position",
+        "PositionRepository",
+        "PositionRepositoryImpl",
+        "GetAccountSummaryRequestDTO",
+        "GetAccountSummaryResponseDTO",
+        "ExportAccountReportsRequestDTO",
+        "ExportAccountReportsResponseDTO"
+      ],
+      "responsibility_summary": "负责管理用户证券账户信息、资金余额、持仓头寸、保证金及盈利报表的计算与导出，支持账户相关报表和资金查询。",
+      "reasons": {
+        "cohesion": "聚合账户相关实体及仓储实现资金与持仓管理，用例涵盖账户查询、报告生成及保证金计算。",
+        "coupling": "依赖数据库持久化和受限订单模块状态，无直接调用其他业务模块，接口清晰促进解耦。",
+        "requirements_trace": [
+          "2.1.4 Use Case 4: Accounts & Funds",
+          "3.4 Logical Database Requirements - 账户及资金持久化",
+          "3.6 Software System Attributes - Correctness 与 Availability"
+        ]
+      },
+      "features": [
+        {
+          "name": "accountBalanceAndMarginCalculation",
+          "methods": [
+            "AccountService.get_balance",
+            "AccountService.calculate_margin",
+            "AccountService.calculate_pl"
+          ],
+          "requirements": "用户查询账户余额、持仓市值与保证金数据，系统计算并实时/近实时返回结果。"
+        },
+        {
+          "name": "exportAccountReports",
+          "methods": [
+            "AccountService.export_account_reports"
+          ],
+          "requirements": "用户导出账户相关报告（P/L，行业配置，权益分布图），系统生成可下载文件。"
+        }
+      ]
+    }
+  ]
+}
