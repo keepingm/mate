@@ -1,7 +1,7 @@
 llm:
   api_key: 'sk-d6QZdnO61LR3QOGgDKEqoZtBmvqdwoejfldGZjW54FPMRuyg'
   base_url: 'https://xiaoai.plus/v1'
-  model: 'gpt-3.5-turbo'
+  model: 'gpt-4o'
 
 dataset:
   root_path: '/home/mgh/dev/data/dataset'

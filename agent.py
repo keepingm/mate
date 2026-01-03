@@ -1,22 +1,19 @@
 # app.py
-from pathlib import Path
-
-from piplines.core import PipelineStep
-from utils.file_utils import read_file
-from utils.dataset_utils import load_dataset
-from utils.file_utils import write_file
-from utils.file_utils import read_file
 
 from agents.test_agent import (
     create_test_architect,
     create_test_designer,
     create_test_development_engineer
 )
+from piplines.core import PipelineStep
+from utils.dataset_utils import load_dataset
+from utils.file_utils import read_file
+from utils.file_utils import write_file
 from utils.memory_utils import Memory
 
 
 class TestAgentApp:
-    DEBUG_RUN = {1}
+    DEBUG_RUN = {4}
 
     def __init__(self, dataset):
         self.dataset = dataset
@@ -34,7 +31,6 @@ class TestAgentApp:
         """
         一个 generator，用于逐步流式返回每个 Chat/Chunk 的内容
         """
-        # 以下以 Step 1 为例
         docs = load_dataset(self.dataset)
 
         # --------------------------------------------------------------------
@@ -62,6 +58,55 @@ class TestAgentApp:
             # 最终结果在 streaming_output.result
             final1 = streaming_output.result
             # 你也可以 yield final1.raw 或 final1.content
+
+        if 2 in self.DEBUG_RUN:
+            memory = Memory('memory/test_plan.json')
+            modules = memory.modules
+            cot2_outs=[]
+            step2 = PipelineStep(
+                agent=self.test_designer,
+                template_text=self.cot2_desc,
+                expected_output=self.cot2_out,
+                output_file=''
+            )
+            from pathlib import Path
+
+            base = Path('output')
+
+            path = base / (docs.dataset_name+  "testcase.md")
+
+            for module in modules:
+                step2_out = step2.run(
+                    sut=module.to_json
+                )
+                for chunk in step2_out:
+                    yield chunk
+                result = step2_out.result.raw
+                write_file(path=path,content=result,overwrite=False)
+
+            print('Cot2 — Test design end')
+
+        if 4 in self.DEBUG_RUN:
+            print("Step 4: Test develop...")
+
+            testcase=read_file('output/'+docs.dataset_name+"testcase.md")
+            step4 = PipelineStep(
+                agent=self.test_developer,
+                template_text=self.cot4_desc,
+                expected_output=self.cot4_out,
+                output_file=''
+            )
+
+            step4_output = step4.run(
+                TEST_CASES_JSON=testcase,
+                class_diagram=docs.uml_class_text,
+                ROOT_DIR=r"/home/mgh/dev/data/mate_workplace/stock/backend"
+            )
+            for chunk in step4_output:
+                yield chunk
+                print(chunk.content, end="", flush=True)
+
+
 
     def run(self):
         print("\nStarting TestAgent Pipeline...\n")

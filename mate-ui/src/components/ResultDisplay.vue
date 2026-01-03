@@ -20,7 +20,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="content-section">
       <div v-if="!content && !generating" class="empty-state">
         <!-- Logo 展示 -->
@@ -32,23 +32,21 @@
         </div>
       </div>
       <div v-else class="content-area">
-        <div class="content-header">
-          <h3 v-if="currentTitle">{{ currentTitle }}</h3>
-        </div>
         <div class="content-body" ref="contentBody">
           <!-- 对话消息列表 -->
           <div class="message-list">
             <!-- AI 回复消息 -->
             <div v-if="content || generating" class="message-item ai-message">
               <el-avatar class="message-avatar" :size="32">
-                <el-icon><Robot /></el-icon>
+                <el-icon><Avatar /></el-icon>
               </el-avatar>
               <div class="message-content">
-                <div 
-                  v-if="content" 
-                  class="content-text markdown-body"
-                  v-html="renderedContent"
-                ></div>
+                <div
+                  v-if="content"
+                  class="content-text"
+                >
+                  <vue-markdown :source="content" :options="markdownOptions" />
+                </div>
                 <div v-if="generating && !content" class="typing-indicator">
                   <span></span>
                   <span></span>
@@ -66,14 +64,31 @@
 
 <script>
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-import { ChatDotRound, Robot } from '@element-plus/icons-vue'
+import { ChatDotRound, Avatar } from '@element-plus/icons-vue'
+import VueMarkdown from 'vue3-markdown-it'
+import 'highlight.js/styles/default.css' // 代码高亮主题
+
+// 配置marked以支持代码高亮
+import hljs from 'highlight.js'
+
+// 设置marked选项
+marked.setOptions({
+  highlight: function(code, lang) {
+    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+    return hljs.highlight(code, { language }).value;
+  },
+  breaks: true,
+  gfm: true,
+  headerIds: false,
+  mangle: false
+});
 
 export default {
   name: 'ResultDisplay',
   components: {
     ChatDotRound,
-    Robot
+    Avatar,
+    VueMarkdown
   },
   props: {
     content: {
@@ -104,38 +119,30 @@ export default {
   },
   data() {
     return {
-      stages: ['测试计划', '测试设计', '测试评审', '测试开发', '测试运行']
+      stages: ['测试计划', '测试设计', '测试评审', '测试开发', '测试运行'],
+      markdownOptions: {
+        html: true,
+        linkify: true,
+        typographer: true,
+        breaks: true,
+        langPrefix: 'hljs language-',
+        highlight: function (str, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return hljs.highlight(str, { language: lang }).value;
+            } catch (err) {
+              console.error('代码高亮错误:', err);
+            }
+          }
+          return hljs.highlightAuto(str).value;
+        }
+      }
     }
   },
   mounted() {
-    // 配置 marked 选项
-    marked.setOptions({
-      breaks: true, // 支持 GitHub 风格的换行
-      gfm: true, // 启用 GitHub Flavored Markdown
-      headerIds: false, // 禁用自动生成 header ID
-      mangle: false // 不混淆邮箱地址
-    })
+    // 组件挂载后无需特殊配置
   },
   computed: {
-    renderedContent() {
-      if (!this.content) return ''
-      
-      if (this.enableMarkdown) {
-        try {
-          // 使用 marked 将 Markdown 转换为 HTML
-          const html = marked.parse(this.content)
-          // 使用 DOMPurify 清理 HTML，防止 XSS 攻击
-          return DOMPurify.sanitize(html)
-        } catch (error) {
-          console.error('Markdown 渲染错误:', error)
-          // 如果渲染失败，返回原始内容（转义 HTML）
-          return this.escapeHtml(this.content)
-        }
-      } else {
-        // 如果不启用 Markdown，返回转义的 HTML
-        return this.escapeHtml(this.content)
-      }
-    }
   },
   watch: {
     content() {
@@ -159,6 +166,337 @@ export default {
   }
 }
 </script>
+
+<style>
+.result-display {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.progress-section {
+  padding: 20px 0;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.progress-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #303133;
+}
+
+.progress-steps {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.progress-step:not(:last-child) .step-indicator::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: #dcdfe6;
+  z-index: -1;
+}
+
+.progress-step.completed:not(:last-child) .step-indicator::after {
+  background: #409eff;
+}
+
+.step-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  background: #f4f4f5;
+  color: #909399;
+  font-size: 14px;
+  font-weight: bold;
+  position: relative;
+  z-index: 2;
+}
+
+.progress-step.completed .step-indicator {
+  background: #409eff;
+  color: #fff;
+}
+
+.progress-step.active .step-indicator {
+  background: #409eff;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.3);
+}
+
+.step-check {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.step-number {
+  font-size: 14px;
+}
+
+.step-label {
+  font-size: 12px;
+  color: #606266;
+  text-align: center;
+  max-width: 60px;
+  word-break: break-word;
+}
+
+.progress-step.completed .step-label,
+.progress-step.active .step-label {
+  color: #409eff;
+}
+
+.content-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #909399;
+}
+
+.logo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo-icon {
+  font-size: 64px;
+  color: #409eff;
+  margin-bottom: 16px;
+}
+
+.logo-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: #303133;
+  letter-spacing: 1px;
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content-header {
+  padding: 16px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.content-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.content-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.message-item {
+  display: flex;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.message-avatar {
+  background-color: #409eff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-text {
+  width: 100%;
+}
+
+/* 代码块样式增强 */
+.content-text pre {
+  background-color: #2d2d2d !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  overflow-x: auto !important;
+  margin: 16px 0 !important;
+  border: 1px solid #444 !important;
+  position: relative;
+}
+
+.content-text code {
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace !important;
+  font-size: 14px !important;
+}
+
+.content-text pre code {
+  background: none !important;
+  padding: 0 !important;
+  color: #f8f8f2 !important;
+  display: block !important;
+  overflow-x: auto !important;
+}
+
+/* 代码高亮主题 */
+.content-text .hljs-comment,
+.content-text .hljs-quote {
+  color: #888;
+}
+
+.content-text .hljs-keyword,
+.content-text .hljs-selector-tag,
+.content-text .hljs-subst {
+  color: #f92672;
+}
+
+.content-text .hljs-number,
+.content-text .hljs-literal,
+.content-text .hljs-variable,
+.content-text .hljs-template-variable,
+.content-text .hljs-tag .hljs-attr {
+  color: #ae81ff;
+}
+
+.content-text .hljs-string,
+.content-text .hljs-doctag {
+  color: #a6e22e;
+}
+
+.content-text .hljs-title,
+.content-text .hljs-section,
+.content-text .hljs-selector-id {
+  color: #a6e22e;
+}
+
+.content-text .hljs-type,
+.content-text .hljs-class .hljs-title {
+  color: #66d9ef;
+}
+
+.content-text .hljs-tag,
+.content-text .hljs-name,
+.content-text .hljs-attribute {
+  color: #f92672;
+}
+
+.content-text .hljs-symbol,
+.content-text .hljs-bullet,
+.content-text .hljs-link,
+.content-text .hljs-meta,
+.content-text .hljs-selector-attr,
+.content-text .hljs-selector-pseudo {
+  color: #bf79db;
+}
+
+.content-text .hljs-built_in,
+.content-text .hljs-deletion {
+  color: #e6db74;
+}
+
+.content-text .hljs-formula {
+  background: #0f0f0f;
+}
+
+.content-text .hljs-emphasis {
+  font-style: italic;
+}
+
+.content-text .hljs-strong {
+  font-weight: bold;
+}
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background-color: #b5b5b5;
+  border-radius: 50%;
+  display: inline-block;
+  animation: typing 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typing {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background-color: #409eff;
+  margin-left: 4px;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+</style>
+
 
 <style scoped>
 .result-display {
