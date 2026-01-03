@@ -30,6 +30,11 @@
         <el-main class="main-content">
           <!-- 新建会话页面 -->
           <div v-if="activeModule === 'new-chat'" class="content-wrapper">
+            <!--
+              注意：这里传递的是 currentContent (computed计算属性)，
+              而不是 currentContentChunks (数组)
+            -->
+            <!-- 增加 @stage-click 事件监听 -->
             <ResultDisplay
               ref="resultDisplay"
               :content="currentContent"
@@ -37,22 +42,23 @@
               :current-stage-index="currentStageIndex"
               :generating="generating"
               :current-title="currentTitle"
+              @stage-click="handleStageClick"
             />
-            
+
             <!-- 底部开始按钮 -->
             <DocumentUpload
               :generating="generating"
               @start="handleStart"
             />
           </div>
-          
+
           <!-- 模块 A 页面 -->
           <ModuleA v-else-if="activeModule === 'module-a'" />
-          
+
           <!-- 模块 B 页面 -->
           <ModuleB v-else-if="activeModule === 'module-b'" />
-          
-          <!-- 模块 C 页面（可以后续添加） -->
+
+          <!-- 模块 C 页面 -->
           <div v-else-if="activeModule === 'module-c'" class="module-placeholder">
             <el-empty description="模块 C 功能开发中..." />
           </div>
@@ -69,7 +75,7 @@ import DocumentUpload from './components/DocumentUpload.vue'
 import AppHeader from './components/AppHeader.vue'
 import ModuleA from './components/ModuleA.vue'
 import ModuleB from './components/ModuleB.vue'
-import { getHistoryList, getHistoryDetail, runStream } from './api'
+import { getHistoryList, getHistoryDetail } from './api' // 移除了 runStream，改用原生 fetch
 
 export default {
   name: 'App',
@@ -94,12 +100,13 @@ export default {
       selectedModel: 'gpt-4',
       userName: '张三',
       userRole: '普通用户',
-      activeModule: 'new-chat'
+      activeModule: 'new-chat',
+      stageHistory: ['', '', '', '', '']
     }
   },
   computed: {
+    // 将数组中的所有 chunk 拼接成一个字符串，传给 ResultDisplay 进行 Markdown 渲染
     currentContent() {
-      // 实时join所有chunks
       return this.currentContentChunks.join('')
     }
   },
@@ -107,6 +114,27 @@ export default {
     this.loadHistoryList()
   },
   methods: {
+
+    /**
+     * 加载不同阶段对话
+     * @param index
+     */
+    handleStageClick(index) {
+      // 安全检查：如果正在生成，或者没有该阶段的历史数据，则不跳转
+      if (this.generating) return
+
+      const historyContent = this.stageHistory[index]
+      console.log(this.stageHistory.length)
+      if (historyContent) {
+        console.log('回看阶段:', this.stages[index])
+        // 1. 替换当前显示内容
+        this.currentContentChunks = [historyContent]
+        // 2. 高亮点击的步骤
+        this.currentStageIndex = index
+        // 3. 更新标题
+        this.currentStage = this.stages[index]
+      }
+    },
     /**
      * 加载历史对话列表
      */
@@ -114,7 +142,7 @@ export default {
       try {
         const response = await getHistoryList()
         this.historyList = response.data || []
-        
+
         // 如果有历史记录，默认选中第一个
         if (this.historyList.length > 0 && !this.currentHistoryId) {
           this.handleHistorySelect(this.historyList[0].id)
@@ -125,7 +153,7 @@ export default {
         this.historyList = this.getMockHistoryList()
       }
     },
-    
+
     /**
      * 选择历史对话
      */
@@ -135,6 +163,7 @@ export default {
         const response = await getHistoryDetail(id)
         const detail = response.data
         this.currentTitle = detail.title || ''
+        // 确保是数组格式
         this.currentContentChunks = detail.content ? [detail.content] : []
         this.currentStage = detail.stage || ''
         this.currentStageIndex = detail.stageIndex !== undefined ? detail.stageIndex : -1
@@ -148,7 +177,7 @@ export default {
         this.currentStageIndex = mockDetail.stageIndex !== undefined ? mockDetail.stageIndex : -1
       }
     },
-    
+
     /**
      * Logo 点击事件
      */
@@ -161,56 +190,32 @@ export default {
       this.currentStageIndex = -1
       this.generating = false
       this.activeModule = 'new-chat'
-      // 重新加载历史列表
       this.loadHistoryList()
     },
-    
+
     /**
      * 模块选择
      */
     handleModuleSelect(module) {
       this.activeModule = module
-      
-      // 根据模块执行不同操作
-      switch (module) {
-        case 'new-chat':
-          this.handleNewChat()
-          break
-        case 'module-a':
-          // 切换到模块 A，清空当前会话内容
-          this.currentHistoryId = null
-          this.currentTitle = ''
-          this.currentContentChunks = []
-          this.currentStage = ''
-          this.currentStageIndex = -1
-          this.generating = false
-          break
-        case 'module-b':
-          // 切换到模块 B，清空当前会话内容
-          this.currentHistoryId = null
-          this.currentTitle = ''
-          this.currentContentChunks = []
-          this.currentStage = ''
-          this.currentStageIndex = -1
-          this.generating = false
-          break
-        case 'module-c':
-          // 切换到模块 C，清空当前会话内容
-          this.currentHistoryId = null
-          this.currentTitle = ''
-          this.currentContentChunks = []
-          this.currentStage = ''
-          this.currentStageIndex = -1
-          this.generating = false
-          break
+
+      // 切换模块时清空当前会话内容
+      if (module !== 'new-chat') {
+        this.currentHistoryId = null
+        this.currentTitle = ''
+        this.currentContentChunks = []
+        this.currentStage = ''
+        this.currentStageIndex = -1
+        this.generating = false
+      } else {
+        this.handleNewChat()
       }
     },
-    
+
     /**
      * 新建对话
      */
     handleNewChat() {
-      // 清空当前内容
       this.currentHistoryId = null
       this.currentTitle = ''
       this.currentContentChunks = []
@@ -218,77 +223,123 @@ export default {
       this.currentStageIndex = -1
       this.generating = false
     },
-    
+
     /**
      * 处理模型切换
      */
     handleModelChange(model) {
       this.selectedModel = model
       console.log('切换模型:', model)
-      // 这里可以添加切换模型后的逻辑，比如重新加载配置等
     },
-    
+
     /**
      * 处理用户操作
      */
     handleUserAction(action) {
       switch (action) {
         case 'profile':
-          // 打开个人资料
           console.log('打开个人资料')
           break
         case 'settings':
-          // 打开设置
           console.log('打开设置')
           break
         case 'logout':
-          // 退出登录
           console.log('退出登录')
-          // 这里可以添加退出登录的逻辑
           break
       }
     },
-    
+
     /**
-     * 开始生成
+     * 开始生成 - 核心修改部分
+     * 使用 fetch 处理 NDJSON 流式数据
      */
-    async handleStart() {
+    async handleStart({ project, prompt }) {
+      // 1. 初始化状态
       this.generating = true
-      this.currentContentChunks = [] // 清空chunks数组
-      this.currentStageIndex = 0
-      this.currentStage = this.stages[0]
-      this.currentTitle = 'LLM 响应生成'
-      
+      this.currentContentChunks = []
+      this.currentStageIndex = -1
+      this.currentTitle = prompt || '测试生成任务'
+      // 重置历史记录槽位
+      this.stageHistory = ['', '', '', '', '']
+
       try {
-        await runStream(
-          // 流式数据回调 - 每次收到chunk立即添加到数组
-          (chunk) => {
-            if (chunk) {
-              // 使用push方法，Vue会自动检测数组变化并更新视图
-              this.currentContentChunks.push(chunk)
-            }
-          },
-          // 完成回调
-          () => {
-            this.generating = false
-            this.currentStageIndex = 4 // 所有阶段完成
-            // 重新加载历史列表
-            this.loadHistoryList()
-          },
-          // 错误回调
-          (error) => {
-            console.error('生成失败:', error)
-            this.generating = false
-            this.currentContentChunks.push('\n\n[错误] ' + error.message)
+        // 直接连接后端，绕过代理（根据你之前的反馈）
+        const response = await fetch(`http://127.0.0.1:5000/run?project=${encodeURIComponent(project)}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+        if (!response.ok) throw new Error(`请求失败: ${response.statusText}`)
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ''
+        let isReading = true
+
+        while (isReading) {
+          const { done, value } = await reader.read()
+          if (done) {
+            isReading = false
+            break
           }
-        )
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop()
+
+          for (const line of lines) {
+            if (!line.trim()) continue
+
+            try {
+              const msg = JSON.parse(line)
+
+              if (msg.type === 'stage') {
+                // 【场景 A：切换阶段】
+
+                // 1. 在清空前，先将"上一个阶段"的内容归档到 history
+                // (前提是上一个阶段是有效的，即 index >= 0)
+                if (this.currentStageIndex >= 0 && this.currentStageIndex < 5) {
+                  this.stageHistory[this.currentStageIndex] = this.currentContentChunks.join('')
+                }
+
+                // 2. 更新状态到新阶段
+                this.currentStageIndex = msg.data.index
+                this.currentStage = msg.data.name
+
+                // 3. 清空屏幕
+                this.currentContentChunks = []
+              }
+              else if (msg.type === 'content') {
+                // 【场景 B：追加内容】
+                this.currentContentChunks.push(msg.data)
+              }
+            } catch (e) {
+              console.warn('JSON Parse Error', e)
+            }
+          }
+        }
+
+        // 【循环结束后】：非常重要！
+        // 因为最后一个阶段完成后，不会再有新的 'stage' 信号来触发归档
+        // 所以必须手动保存最后一个阶段的内容
+        if (this.currentStageIndex >= 0 && this.currentStageIndex < 5) {
+          this.stageHistory[this.currentStageIndex] = this.currentContentChunks.join('')
+        }
+
+        // 结束处理
+        this.generating = false
+        // 确保进度条显示完成
+        if (this.currentStageIndex < 4) this.currentStageIndex = 4
+
+        if (this.loadHistoryList) this.loadHistoryList()
+
       } catch (error) {
         console.error('生成失败:', error)
         this.generating = false
-        this.currentContentChunks.push('\n\n[错误] ' + (error.message || '生成过程中发生错误'))
+        this.currentContentChunks.push(`\n\n> **[系统错误]**: ${error.message}`)
       }
     },
-    
+
     /**
      * 获取模拟历史列表（用于开发环境）
      */
@@ -303,33 +354,18 @@ export default {
           id: '2',
           title: '订单管理模块测试用例',
           createTime: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: '3',
-          title: '支付系统接口测试',
-          createTime: new Date(Date.now() - 172800000).toISOString()
-        },
-        {
-          id: '4',
-          title: '商品管理功能测试',
-          createTime: new Date(Date.now() - 259200000).toISOString()
-        },
-        {
-          id: '5',
-          title: '库存管理系统测试',
-          createTime: new Date(Date.now() - 345600000).toISOString()
         }
       ]
     },
-    
+
     /**
      * 获取模拟历史详情（用于开发环境）
      */
     getMockHistoryDetail(id) {
       return {
         id: id,
-        title: '用户管理系统测试用例',
-        content: '这是模拟的测试用例内容...',
+        title: '模拟测试详情 ' + id,
+        content: '# 测试运行\n\n这里是模拟的测试内容...',
         stage: '测试运行',
         stageIndex: 4
       }
