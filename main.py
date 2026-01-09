@@ -56,6 +56,7 @@ from config import config
 
 
 if __name__ == "__main__":
-    app=TestAgentApp('stock')
-    app.run()
+    app=TestAgentApp(dataset_name='hone')
+    for _ in app.stream_run(debug=True):
+        pass
 

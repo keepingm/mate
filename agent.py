@@ -1,5 +1,6 @@
 # app.py
 import json
+from pathlib import Path
 
 from agents.test_agent import (
     create_test_architect,
@@ -14,10 +15,11 @@ from utils.memory_utils import Memory
 
 
 class TestAgentApp:
-    DEBUG_RUN = {2, 4}
+    DEBUG_RUN = {4}
 
-    def __init__(self, dataset):
-        self.dataset = dataset
+    def __init__(self, *, dataset_name):
+        self.dataset_name = dataset_name
+        self.data = load_dataset(dataset_name)
         self.test_architect = create_test_architect()
         self.test_designer=create_test_designer()
         self.test_developer=create_test_development_engineer()
@@ -35,9 +37,9 @@ class TestAgentApp:
             "data": data
         }, ensure_ascii=False) + "\n"
 
-    def stream_run(self):
-        docs = load_dataset(self.dataset)
-
+    def stream_run(self, debug):
+        print(self.data.dataset_name)
+        print(self.data.dataset_root)
         # 定义阶段索引映射 (对应前端 stages 数组的下标)
         # ['测试计划', '测试设计', '测试评审', '测试开发', '测试运行']
         STAGE_PLAN = 0
@@ -50,31 +52,35 @@ class TestAgentApp:
         # Cot1 — Test planning (测试计划)
         # --------------------------------------------------------------------
         if 1 in self.DEBUG_RUN:
-            # 【关键】发送阶段开始信号
-            yield self._pack_msg("stage", {"index": STAGE_PLAN, "name": "测试计划"})
+            if not debug:
+                yield self._pack_msg("stage", {"index": STAGE_PLAN, "name": "测试计划"})
 
             step1 = PipelineStep(
                 agent=self.test_architect,
                 template_text=self.cot1_desc,
                 expected_output=self.cot1_out,
-                output_file="output/" + docs.dataset_name + "_test_plan.md"
+                output_file="memory/working_memory/test_plan.json"
             )
 
             streaming_output = step1.run(
-                srs=docs.srs_text,
-                class_diagram=docs.uml_class_text,
-                sequence_diagram=docs.uml_sequence_text
+                srs=self.data.srs,
+                class_diagram=self.data.uml_class,
+                sequence_diagram=self.data.uml_sequence
             )
 
             for chunk in streaming_output:
                 # 【关键】发送内容块信号. 注意：需要取 chunk.content
                 content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                yield self._pack_msg("content", content)
-                print(chunk.content, end="", flush=True)
-
+                if debug:
+                    print(chunk.content, end="", flush=True)
+                else:
+                    yield self._pack_msg("content", content)
             # 如果需要保留结果供后续使用
             final1 = streaming_output.result
 
+        # load working memory
+        memory = Memory('memory/working_memory/test_plan.json')
+        modules = memory.modules
         # --------------------------------------------------------------------
         # Cot2 — Test design (测试设计)
         # --------------------------------------------------------------------
@@ -82,34 +88,26 @@ class TestAgentApp:
             # 【关键】发送阶段切换信号 -> 切换到第二个页签/进度
             yield self._pack_msg("stage", {"index": STAGE_DESIGN, "name": "测试设计"})
 
-            memory = Memory('memory/test_plan.json')
-            modules = memory.modules
-
             step2 = PipelineStep(
                 agent=self.test_designer,
                 template_text=self.cot2_desc,
                 expected_output=self.cot2_out,
                 output_file=''
             )
-
-            from pathlib import Path
-            base = Path('output')
-            path = base / (docs.dataset_name + "testcase.md")
-
             for module in modules:
                 # 这里可能需要在内容里加个标题，说明正在设计哪个模块
                 yield self._pack_msg("content",
                                      f"\n\n**正在设计模块: {module.name if hasattr(module, 'name') else '...'}**\n\n")
 
                 step2_out = step2.run(sut=module.to_json)
-
                 for chunk in step2_out:
                     content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                    yield self._pack_msg("content", content)
-                    print(chunk.content, end="", flush=True)
-
+                    if debug:
+                        print(chunk.content, end="", flush=True)
+                    else:
+                        yield self._pack_msg("content", content)
                 result = step2_out.result.raw
-                write_file(path=path, content=result, overwrite=False)
+                write_file(path='memory/working_memory/test_case_' + module.name+'.md', content=result, overwrite=False)
 
         # --------------------------------------------------------------------
         # 跳过阶段 3 (测试评审) 的处理
@@ -122,103 +120,29 @@ class TestAgentApp:
         if 4 in self.DEBUG_RUN:
             # 【关键】发送阶段切换信号 -> 对应前端 index 3
             yield self._pack_msg("stage", {"index": STAGE_DEV, "name": "测试开发"})
-
-            testcase = read_file('output/' + docs.dataset_name + "testcase.md")
             step4 = PipelineStep(
                 agent=self.test_developer,
                 template_text=self.cot4_desc,
                 expected_output=self.cot4_out,
                 output_file=''
             )
+            for module in modules:
+                testcase = read_file('memory/working_memory/test_case_' + module.name + ".md")
+                step4_output = step4.run(
+                    TEST_CASES_JSON=testcase,
+                    class_diagram=self.data.uml_class,
+                    ROOT_DIR=self.data.sut_root
+                )
+                for chunk in step4_output:
+                    content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                    if debug:
+                        print(chunk.content, end="", flush=True)
+                    else:
+                        yield self._pack_msg("content", content)
 
-            step4_output = step4.run(
-                TEST_CASES_JSON=testcase,
-                class_diagram=docs.uml_class_text,
-                ROOT_DIR=r"/home/mgh/dev/data/mate_workplace/stock/backend"
-            )
-            for chunk in step4_output:
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                yield self._pack_msg("content", content)
-
-
-    # def stream_run(self):
-    #     """
-    #     一个 generator，用于逐步流式返回每个 Chat/Chunk 的内容
-    #     """
-    #     docs = load_dataset(self.dataset)
-    #
-    #     # --------------------------------------------------------------------
-    #     # Cot1 — Test planning
-    #     # --------------------------------------------------------------------
-    #     if 1 in self.DEBUG_RUN:
-    #         print("Step 1: Test planning...")
-    #
-    #         step1 = PipelineStep(
-    #             agent=self.test_architect,
-    #             template_text=self.cot1_desc,
-    #             expected_output=self.cot1_out,
-    #             output_file="output/" + docs.dataset_name + "_test_plan.md"
-    #         )
-    #
-    #         streaming_output = step1.run(
-    #             srs=docs.srs_text,
-    #             class_diagram=docs.uml_class_text,
-    #             sequence_diagram=docs.uml_sequence_text
-    #         )
-    #
-    #         # 每个流式块逐条 yield
-    #         for chunk in streaming_output:
-    #             yield chunk
-    #         # 最终结果在 streaming_output.result
-    #         final1 = streaming_output.result
-    #         # 你也可以 yield final1.raw 或 final1.content
-    #
-    #     if 2 in self.DEBUG_RUN:
-    #         memory = Memory('memory/test_plan.json')
-    #         modules = memory.modules
-    #         cot2_outs=[]
-    #         step2 = PipelineStep(
-    #             agent=self.test_designer,
-    #             template_text=self.cot2_desc,
-    #             expected_output=self.cot2_out,
-    #             output_file=''
-    #         )
-    #         from pathlib import Path
-    #
-    #         base = Path('output')
-    #
-    #         path = base / (docs.dataset_name+  "testcase.md")
-    #
-    #         for module in modules:
-    #             step2_out = step2.run(
-    #                 sut=module.to_json
-    #             )
-    #             for chunk in step2_out:
-    #                 yield chunk
-    #             result = step2_out.result.raw
-    #             write_file(path=path,content=result,overwrite=False)
-    #
-    #         print('Cot2 — Test design end')
-    #
-    #     if 4 in self.DEBUG_RUN:
-    #         print("Step 4: Test develop...")
-    #
-    #         testcase=read_file('output/'+docs.dataset_name+"testcase.md")
-    #         step4 = PipelineStep(
-    #             agent=self.test_developer,
-    #             template_text=self.cot4_desc,
-    #             expected_output=self.cot4_out,
-    #             output_file=''
-    #         )
-    #
-    #         step4_output = step4.run(
-    #             TEST_CASES_JSON=testcase,
-    #             class_diagram=docs.uml_class_text,
-    #             ROOT_DIR=r"/home/mgh/dev/data/mate_workplace/stock/backend"
-    #         )
-    #         for chunk in step4_output:
-    #             yield chunk
-    #             print(chunk.content, end="", flush=True)
+        # --------------------------------------------------------------------
+        # Cot5 — Test run (测试运行)
+        # --------------------------------------------------------------------
 
 
 
@@ -269,7 +193,7 @@ class TestAgentApp:
                 expected_output=self.cot2_out,
                 output_file=''
             )
-            from pathlib import Path
+
 
             base = Path('output')
 

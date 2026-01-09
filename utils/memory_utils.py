@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Dict, Any, Iterator
@@ -67,9 +68,12 @@ class Module:
 class Memory:
     """
     管理 modules.json 的内存表示
+    支持：
+      - 纯 JSON 文件
+      - Markdown 文件（自动提取 ```json ... ``` 中的内容）
     """
 
-    def __init__(self, json_path: str | Path):
+    def __init__(self, json_path: str|Path):
         self.json_path = Path(json_path).resolve()
         self._modules: List[Module] = []
 
@@ -79,12 +83,31 @@ class Memory:
         if not self.json_path.exists():
             raise FileNotFoundError(f"JSON file not found: {self.json_path}")
 
-        with self.json_path.open("r", encoding="utf-8") as f:
-            raw = json.load(f)
+        # 读取整个文件内容为字符串
+        text = self.json_path.read_text(encoding="utf-8")
 
+        # 尝试 1：直接解析为 JSON（适用于纯 JSON 文件）
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError:
+            # 尝试 2：从 Markdown 的 ```json ... ``` 中提取 JSON
+            match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+            if not match:
+                raise ValueError(
+                    f"File is not valid JSON and does not contain a ```json code block: {self.json_path}"
+                )
+            json_str = match.group(1).strip()
+            if not json_str:
+                raise ValueError(f"Empty JSON code block in file: {self.json_path}")
+            try:
+                raw = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON inside ```json block in {self.json_path}: {e}") from e
+
+        # 验证结构
         modules_raw = raw.get("modules", [])
         if not isinstance(modules_raw, list):
-            raise ValueError('"modules" must be a list')
+            raise ValueError(f'"modules" must be a list in {self.json_path}')
 
         self._modules = [self._parse_module(m) for m in modules_raw]
 
@@ -129,5 +152,9 @@ class Memory:
             yield from module.iter_methods()
 
 
-
+if __name__ == '__main__':
+    memory = Memory('/home/mgh/dev/projects/python_projects/mate/memory/working_memory/test_plan.json')
+    modules = memory.modules
+    for module in modules:
+        print(module.__str__())
 

@@ -11,24 +11,18 @@ from config.config import config
 class DatasetLoader:
     dataset_name: str
     dataset_root: Path
-    config_path: Path
-
-    srs_path: Path
-    uml_class_path: Path
-    uml_sequence_path: Path
-
-    srs_text: str
-    uml_class_text: str
-    uml_sequence_text: str
-
-    config: Dict[str, Any]
+    sut_root: str
+    srs: str
+    uml_class: str
+    uml_sequence: str
+    architecture_design: str
 
 
 def load_dataset(
-    dataset_name: str,
-    *,
-    encoding: str = "utf-8",
-    strict: bool = True,
+        dataset_name: str,
+        *,
+        encoding: str = "utf-8",
+        strict: bool = True,
 ) -> DatasetLoader:
     """
     读取 <global_prefix>/<dataset_name>/config.json，并加载 PRD、UML_class 文件内容。
@@ -60,19 +54,28 @@ def load_dataset(
         raise ValueError(f"Invalid JSON in {config_path}: {e}") from e
 
     # 取 srs / UML_class 的相对路径
-    srs_rel = config_obj.get("SRS")
-    uml_class_rel = config_obj.get("UML_class")
-    uml_sequence_rel = config_obj.get("UML_sequence")
+    srs_rel = config_obj.get("srs")
+    uml_class_rel = config_obj.get("uml_class")
+    uml_sequence_rel = config_obj.get("uml_sequence")
+    architecture_design_rel = config_obj.get("architecture_design")
+    sut_root=config_obj.get("sut_root")
 
     if strict:
         if not srs_rel:
             raise KeyError(f'Missing or empty key "PRD" in {config_path}')
         if not uml_class_rel:
             raise KeyError(f'Missing or empty key "UML_class" in {config_path}')
+        if not uml_sequence_rel:
+            raise KeyError(f'Missing or empty key "UML_sequence" in {config_path}')
+        if not architecture_design_rel:
+            raise KeyError(f'Missing or empty key "architecture_design" in {config_path}')
 
     srs_path = (dataset_root / srs_rel).resolve() if srs_rel else (dataset_root / "MISSING_PRD")
     uml_class_path = (dataset_root / uml_class_rel).resolve() if uml_class_rel else (dataset_root / "MISSING_UML_class")
-    uml_sequence_path = (dataset_root / uml_sequence_rel).resolve() if uml_sequence_rel else (dataset_root / "MISSING_UML_class")
+    uml_sequence_path = (dataset_root / uml_sequence_rel).resolve() if uml_sequence_rel else (
+            dataset_root / "MISSING_UML_class")
+    architecture_design_path = (dataset_root / architecture_design_rel).resolve() if architecture_design_rel else (
+            dataset_root / "MISSING_Architecture_Design")
 
     # 读取文件内容
     def _read_text(p: Path) -> str:
@@ -85,28 +88,24 @@ def load_dataset(
     srs_text = _read_text(srs_path)
     uml_class_text = _read_text(uml_class_path)
     uml_sequence_text = _read_text(uml_sequence_path)
+    architecture_design_text = _read_text(architecture_design_path)
 
     return DatasetLoader(
         dataset_name=dataset_name,
         dataset_root=dataset_root,
-        config_path=config_path,
-        srs_path=srs_path,
-        uml_class_path=uml_class_path,
-        uml_sequence_path=uml_sequence_path,
-        srs_text=srs_text,
-        uml_class_text=uml_class_text,
-        uml_sequence_text=uml_sequence_text,
-        config=config_obj,
+        srs=srs_text,
+        uml_class=uml_class_text,
+        uml_sequence=uml_sequence_text,
+        architecture_design=architecture_design_text,
+        sut_root=sut_root
     )
 
 
 # ---- 使用示例 ----
 if __name__ == "__main__":
-
     docs = load_dataset(
         "hone",
         strict=True,
     )
-    print("PRD path:", docs.srs_path)
-    print("UML_class path:", docs.uml_class_path)
-    print("PRD content preview:", docs.srs_text)
+
+    print("PRD content preview:", docs.uml_class)
