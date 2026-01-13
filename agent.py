@@ -5,7 +5,8 @@ from pathlib import Path
 from agents.test_agent import (
     create_test_architect,
     create_test_designer,
-    create_test_development_engineer
+    create_test_development_engineer,
+    create_test_debugger
 )
 from piplines.core import PipelineStep
 from utils.dataset_utils import load_dataset
@@ -15,7 +16,7 @@ from utils.memory_utils import Memory
 
 
 class TestAgentApp:
-    DEBUG_RUN = {4}
+    DEBUG_RUN = {4, 5}
 
     def __init__(self, *, dataset_name):
         self.dataset_name = dataset_name
@@ -23,12 +24,15 @@ class TestAgentApp:
         self.test_architect = create_test_architect()
         self.test_designer=create_test_designer()
         self.test_developer=create_test_development_engineer()
+        self.test_debugger=create_test_debugger()
         self.cot1_desc = read_file('prompt/test_plan/test_plan.md')
         self.cot1_out = read_file('prompt/test_plan/test_plan_out.md')
         self.cot2_desc = read_file('prompt/test_design/test_design.md')
         self.cot2_out = read_file('prompt/test_design/test_design_out.md')
         self.cot4_desc = read_file('prompt/test_development/test_develop.md')
         self.cot4_out = read_file('prompt/test_development/test_develop_out.md')
+        self.cot5_desc=read_file('prompt/test_debugger/test_debug.md')
+        self.cot5_out=read_file('prompt/test_debugger/test_debug_out.md')
 
     def _pack_msg(self, type_str, data):
         """辅助函数：将数据打包成 JSON 行"""
@@ -47,6 +51,7 @@ class TestAgentApp:
         STAGE_REVIEW = 2
         STAGE_DEV = 3
         STAGE_RUN = 4
+
 
         # --------------------------------------------------------------------
         # Cot1 — Test planning (测试计划)
@@ -129,6 +134,8 @@ class TestAgentApp:
             for module in modules:
                 testcase = read_file('memory/working_memory/test_case_' + module.name + ".md")
                 step4_output = step4.run(
+                    language=self.data.language,
+                    available_tools=self.tools_prompt(self.data.language),
                     TEST_CASES_JSON=testcase,
                     class_diagram=self.data.uml_class,
                     ROOT_DIR=self.data.sut_root
@@ -143,6 +150,25 @@ class TestAgentApp:
         # --------------------------------------------------------------------
         # Cot5 — Test run (测试运行)
         # --------------------------------------------------------------------
+        if 5 in self.DEBUG_RUN:
+            yield self._pack_msg("stage", {"index": STAGE_DEV, "name": "测试开发"})
+            step5 = PipelineStep(
+                agent=self.test_debugger,
+                template_text=self.cot5_desc,
+                expected_output=self.cot5_out,
+                output_file='output/'+self.data.dataset_name+'_test_report.md'
+            )
+            test_suit=read_file('memory/working_memory/generatedTest.txt')
+            step5_output=step5.run(
+                test_suit=test_suit,
+                ROOT_DIR=self.data.sut_root
+            )
+            for chunk in step5_output:
+                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                if debug:
+                    print(chunk.content, end="", flush=True)
+                else:
+                    yield self._pack_msg("content", content)
 
 
 
@@ -231,6 +257,55 @@ class TestAgentApp:
             )
 
             print('test_case:' + step4_output)
+
+    def tools_prompt(self,language):
+        if language == 'python':
+            return """
+        ---
+
+### ✅ 针对 **Python 项目**
+
+1. **编写测试用例**  
+   - 所有测试代码必须写入 `{{ROOT_DIR}}/tests/` 目录下。
+   - 文件命名格式为：`test_<被测模块名>.py`（例如：被测模块为 `utils.py`，则测试文件为 `test_utils.py`）。
+   - 你可以根据逻辑相关性，将多个测试函数组织在同一个测试文件中。
+
+2. **写入测试文件**  
+   - 使用工具 `write_code_file` 将测试代码写入指定路径。
+
+3. **检索源码定义**  
+   - 如需查看被测函数或类的实现细节，请使用 `code_search` 工具进行关键词或符号检索。
+
+4. **运行与验证测试**  
+   - 必须调用 `run_project_generated_tests` 工具执行你编写的测试。
+   - 若出现 `ImportError`、语法错误或其他运行时异常，请立即修正测试代码并重新运行。
+   - **注意**：若错误源于缺失第三方依赖（如 `ModuleNotFoundError: No module named 'xxx'`），请直接反馈“缺少第三方库：xxx”，你无法自行安装或修复此类问题。
+
+---
+        """
+        else:
+            return """
+            ### ✅ 针对 **Java 项目**
+
+1. **编写测试用例**  
+   - 每个被测类 `XXX.java` 应对应一个测试类 `XXXTest.java`。
+   - 测试类必须遵循 **JUnit 5** 规范（使用 `@Test`, `@BeforeEach` 等注解）。
+   - 包路径必须与被测类一致，存放于 `<ROOT_DIR>/src/test/java/<package_name>/` 目录下。
+
+2. **写入测试文件**  
+   - 使用工具 `write_code_file` 将 `XXXTest.java` 写入正确路径。
+
+3. **检索源码定义**  
+   - 如需定位被测类、方法或字段的定义，请使用 `search_java_definition` 工具进行精确查询。
+
+4. **运行与验证测试**  
+   - 必须调用 `run_maven_junit_tests` 工具执行 Maven 构建并运行 JUnit 测试。
+   - 若出现编译错误（如找不到符号、包不存在）或运行时异常，请检查：
+     - 包声明是否正确
+     - 是否遗漏必要 import（如 `org.junit.jupiter.api.Test`）
+     - 被测类是否确实存在且可访问
+   - **注意**：若错误由缺失外部依赖（如 `package xxx does not exist` 且该依赖未在 `pom.xml` 中声明），请反馈“缺少第三方 Java 依赖：xxx”，你无法修改 `pom.xml` 或安装新库。
+            """
 
 
 

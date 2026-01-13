@@ -3,7 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 output
-memory
+memory/*
+log/*
 
 # C extensions
 *.so

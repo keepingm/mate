@@ -197,3 +197,148 @@ class CodeSearchTool(BaseTool):
         # 过滤掉空 parts
         parts = [p for p in parts if p]
         return ".".join(parts)
+
+
+from pydantic import BaseModel, Field
+
+
+class SearchJavaDefinitionInput(BaseModel):
+    root_dir: str = Field(..., description="Java 项目根目录")
+    query: str = Field(..., description="类名或方法名")
+    search_type: str = Field(..., description="class | method")
+    ignore_case: bool = Field(True, description="是否忽略大小写")
+    max_results: int = Field(5, description="最大返回结果数")
+
+
+import os
+import re
+import json
+from typing import Type, Optional
+from pydantic import BaseModel
+from crewai.tools import BaseTool
+
+
+class SearchJavaCodeTool(BaseTool):
+    name: str = "search_java_definition"
+    description: str = (
+        "Search Java class or method definitions and return full definitions "
+        "in structured JSON format."
+    )
+    args_schema: Type[BaseModel] = SearchJavaDefinitionInput
+
+    def _run(
+        self,
+        root_dir: str,
+        query: str,
+        search_type: str,
+        ignore_case: bool = True,
+        max_results: int = 5,
+    ) -> str:
+
+        response = {
+            "success": False,
+            "search_type": search_type,
+            "target_name": query,
+            "results": [],
+            "error": None,
+        }
+
+        if not os.path.isdir(root_dir):
+            response["error"] = f"Directory not found: {root_dir}"
+            return json.dumps(response, ensure_ascii=False)
+
+        flags = re.IGNORECASE if ignore_case else 0
+
+        if search_type == "class":
+            pattern = rf"\b(class|interface|enum)\s+{re.escape(query)}\b"
+        elif search_type == "method":
+            pattern = rf"""
+                ^\s*
+                (public|protected|private|\s)*
+                [\w\<\>\[\]]+\s+
+                {re.escape(query)}
+                \s*\([^;]*\)
+                \s*\{{ 
+            """
+        else:
+            response["error"] = "search_type must be 'class' or 'method'"
+            return json.dumps(response, ensure_ascii=False)
+
+        regex = re.compile(pattern, flags | re.MULTILINE | re.VERBOSE)
+
+        for root, _, files in os.walk(root_dir):
+            for file in files:
+                if not file.endswith(".java"):
+                    continue
+
+                path = os.path.join(root, file)
+                try:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                except Exception:
+                    continue
+
+                for match in regex.finditer(content):
+                    block = self._extract_block(content, match.start())
+                    if not block:
+                        continue
+
+                    info = {
+                        "file": path,
+                        "code": block,
+                    }
+
+                    if search_type == "class":
+                        info["class_name"] = query
+                    else:
+                        info["method_name"] = query
+                        info["class_name"] = self._infer_class_name(content, match.start())
+                        info["signature"] = block.split("{", 1)[0].strip()
+
+                    response["results"].append(info)
+
+                    if len(response["results"]) >= max_results:
+                        response["success"] = True
+                        return json.dumps(response, ensure_ascii=False)
+
+        response["success"] = len(response["results"]) > 0
+        return json.dumps(response, ensure_ascii=False)
+
+    def _extract_block(self, content: str, start_index: int) -> Optional[str]:
+        brace_count = 0
+        in_block = False
+        buf = []
+
+        for ch in content[start_index:]:
+            buf.append(ch)
+            if ch == "{":
+                brace_count += 1
+                in_block = True
+            elif ch == "}":
+                brace_count -= 1
+
+            if in_block and brace_count == 0:
+                return "".join(buf).strip()
+
+        return None
+
+    def _infer_class_name(self, content: str, pos: int) -> Optional[str]:
+        """
+        从方法位置向前推断所属类名（简单但实用）
+        """
+        prefix = content[:pos]
+        matches = re.findall(r"\bclass\s+(\w+)", prefix)
+        return matches[-1] if matches else None
+
+
+
+if __name__ == "__main__":
+    tool = SearchJavaCodeTool()
+
+    print(tool._run(
+        root_dir="/home/mgh/dev/data/dataset/login/backend/",
+        query="UserRepository",
+        search_type="class"
+    ))
+
+

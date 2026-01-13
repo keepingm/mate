@@ -1,9 +1,10 @@
 from crewai import Agent
 from crewai import LLM
 
-from tools.code_search import CodeSearchTool
+from tools.code_search import CodeSearchTool,SearchJavaCodeTool
 from tools.run_py_test import RunProjectGeneratedTestsTool
-from tools.write_python_file import WritePythonFileTool
+from tools.write_python_file import WriteCodeFileTool
+from tools.run_junit_tests import MavenJUnitTool
 from config import config
 
 llm = LLM(
@@ -43,7 +44,21 @@ def create_test_development_engineer():
         goal="Develop text unit test cases into automated code, using Junit or UnitTest frameworks to ensure that the code is compiled correctly, and use a range of tools to assist you in coding.",
         backstory="Experienced test and development engineer, skilled in developing test cases into test code based on text test cases and project code structures written by testers, proficient in Junit and UnitTest frameworks.",
         llm=llm,
-        tools=[CodeSearchTool(), RunProjectGeneratedTestsTool(),WritePythonFileTool()]
+        tools=[CodeSearchTool(), RunProjectGeneratedTestsTool(), WriteCodeFileTool(),MavenJUnitTool(),SearchJavaCodeTool()]
+    )
+
+def create_test_debugger():
+    return Agent(
+        role="Test Debugger",
+        goal="Run test cases, provide test reports, and provide effective feedback for test cases that fail to run.",
+        backstory="""
+        You are a senior testing and debugging engineer with years of experience in software testing and debugging 
+        You have been working in complex systems and high reliability software projects for a long time, 
+        familiar with the complete process from unit testing to system testing, especially skilled in executing test cases, 
+        analyzing failure reasons, locating defect root causes, and structuring the results into reproducible and traceable test reports.
+        """,
+        llm=llm,
+        tools=[CodeSearchTool(), RunProjectGeneratedTestsTool(),MavenJUnitTool(),SearchJavaCodeTool()]
     )
 
 

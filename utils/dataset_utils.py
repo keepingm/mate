@@ -16,6 +16,7 @@ class DatasetLoader:
     uml_class: str
     uml_sequence: str
     architecture_design: str
+    language: str
 
 
 def load_dataset(
@@ -59,6 +60,7 @@ def load_dataset(
     uml_sequence_rel = config_obj.get("uml_sequence")
     architecture_design_rel = config_obj.get("architecture_design")
     sut_root=config_obj.get("sut_root")
+    language = config_obj.get("language")
 
     if strict:
         if not srs_rel:
@@ -97,7 +99,8 @@ def load_dataset(
         uml_class=uml_class_text,
         uml_sequence=uml_sequence_text,
         architecture_design=architecture_design_text,
-        sut_root=sut_root
+        sut_root=sut_root,
+        language=language
     )
 
 

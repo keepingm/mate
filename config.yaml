@@ -1,8 +1,9 @@
 llm:
-  api_key: 'sk-d6QZdnO61LR3QOGgDKEqoZtBmvqdwoejfldGZjW54FPMRuyg'
-  base_url: 'https://xiaoai.plus/v1'
+  api_key: ''
+  base_url: ''
   model: 'gpt-4o'
 
 dataset:
   root_path: '/home/mgh/dev/data/dataset'
+
 
